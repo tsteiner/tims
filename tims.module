@@ -35,7 +35,7 @@ function tims_init() {
   $tmp = &drupal_static('theme_get_registry');
   $theme_registry_array = $tmp[1];
 
-  foreach (tims_get_templates(TRUE) as $hook => $template) {
+  foreach (variable_get('tims_templates', array()) as $hook => $template) {
     $info = array();
     if (isset($theme_registry_array[$hook])) {
       $safeKeys = array('type', 'render element', 'preprocess functions', 'process functions', 'variables');
@@ -62,24 +62,6 @@ function tims_set_template(&$variables, $hook) {
 }
 
 /**
- * @param bool $hookCompatibleKeys
- * @return array
- *
- * Gets all TWIG templates. $hookCompatible keys will replace all - with _ for
- * use in theme hooks.
- */
-function tims_get_templates($hookCompatibleKeys = FALSE) {
-  $templates = array();
-  foreach (variable_get('tims_templates', array()) as $hook => $template) {
-    if ($hookCompatibleKeys) {
-      $hook = strtr($hook, array('-' => '_'));
-    }
-    $templates[$hook] = $template;
-  }
-  return $templates;
-}
-
-/**
  * Renders a template using Twig.
  */
 function tims_render($variables) {
@@ -87,7 +69,7 @@ function tims_render($variables) {
   Twig_Autoloader::register();
   require_once drupal_get_path('module', 'tims') . '/tims_extension.php';
 
-  $templates = tims_get_templates(TRUE);
+  $templates = variable_get('tims_templates', array());
 
   $template = NULL;
   if (isset($variables['#tims_template'])) {
