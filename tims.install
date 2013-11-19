@@ -1,0 +1,49 @@
+<?php
+
+function tims_schema()
+{
+  $schema = array();
+
+  $schema['tims_template'] = array(
+    'description' => 'TWIG Templates provided by the TIMS module.',
+    'fields' => array(
+      'id' => array(
+        'description' => 'Numeric primary key.',
+        'type'        => 'serial'
+      ),
+      'hook' => array(
+        'description' => 'Theme hook for the template',
+        'type'        => 'varchar',
+        'length'      => 255,
+        'not null'    => TRUE,
+      ),
+      'template' => array(
+        'description' => 'The actual TWIG template.',
+        'type'        => 'text',
+        'not null'    => TRUE,
+        'size'        => 'big',
+        'translateable' => TRUE,
+
+      ),
+    ),
+    'primary key' => array('id'),
+    'unique keys' => array(
+      array('hook'),
+    ),
+  );
+
+  return $schema;
+}
+
+/**
+ * Create a table to store the TWIG Templates and copy templates from the old variable.
+ */
+function tims_update_7100()
+{
+  $tables = tims_schema();
+  db_create_table('tims_template', $tables['tims_template']);
+  foreach (variable_get('tims_templates') as $hook => $template) {
+    $e = entity_create('tims_template', array('hook' => $hook, 'template' => $template));
+    $e->save();
+  }
+}

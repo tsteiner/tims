@@ -40,18 +40,18 @@ function tims_init() {
   $tmp = &drupal_static('theme_get_registry');
   $theme_registry_array = $tmp[1];
 
-  foreach (variable_get('tims_templates', array()) as $hook => $template) {
+  foreach (entity_load('tims_template') as $template) {
     $info = array();
-    if (isset($theme_registry_array[$hook])) {
+    if (isset($theme_registry_array[$template->hook])) {
       $safeKeys = array('type', 'render element', 'preprocess functions', 'process functions', 'variables');
-      $info = array_intersect_key($theme_registry_array[$hook], array_flip($safeKeys));
+      $info = array_intersect_key($theme_registry_array[$template->hook], array_flip($safeKeys));
     }
 
     $info['function'] = 'tims_render';
     $info['theme path'] = drupal_get_path('module', 'tims') . '/theme';
     $info['process functions'][] = 'tims_set_template';
 
-    $theme_registry_object[$hook] = $theme_registry_array[$hook] = $info;
+    $theme_registry_object[$template->hook] = $theme_registry_array[$template->hook] = $info;
   }
 }
 
@@ -74,7 +74,10 @@ function tims_render($variables) {
   Twig_Autoloader::register();
   require_once drupal_get_path('module', 'tims') . '/tims_extension.php';
 
-  $templates = variable_get('tims_templates', array());
+  $templates = array();
+  foreach (entity_load('tims_template') as $template) {
+    $templates[$template->hook] = $template->template;
+  }
 
   $template = NULL;
   if (isset($variables['#tims_template'])) {
@@ -107,42 +110,43 @@ function tims_render($variables) {
 }
 
 /**
- * Implements hook_menu().
+ * Implements hook_entity_info
+ * @return array
  */
-function tims_menu() {
-  $items = array();
+function tims_entity_info() {
+  return array(
+    'tims_template' => array(
+      'module'           => 'tims',
+      'label'            => 'Twig Template',
+      'entity class'     => 'TimsTemplateEntity',
+      'controller class' => 'EntityAPIController',
+      'base table'       => 'tims_template',
+      'label callback'   => 'entity_class_label',
+      'uri callback'     => 'entity_class_uri',
+      'access callback'  => 'tims_template_access',
+      'static cache'     => FALSE, // disable the static cache while https://drupal.org/node/1572466 still open
+      'entity keys' => array(
+        'id'    => 'id',
+        'label' => 'hook',
+      ),
+      'admin ui' => array(
+        'file' => 'tims.admin.php',
+        'path' => 'admin/structure/tims',
+      ),
+    ),
+  );
+}
 
-  $items['admin/structure/tims'] = array(
-    'title' => 'Twig templates',
-    'description' => 'Manage content templates using the Twig templating engine.',
-    'page callback' => 'drupal_get_form',
-    'page arguments' => array('tims_list'),
-    'access arguments' => array('administer site configuration'),
-    'type' => MENU_NORMAL_ITEM,
-    'file' => 'tims.admin.php',
-  );
-  $items['admin/structure/tims/create'] = array(
-    'title' => 'Create template',
-    'page callback' => 'drupal_get_form',
-    'page arguments' => array('tims_edit', '_new_'),
-    'access arguments' => array('administer site configuration'),
-    'type' => MENU_LOCAL_ACTION,
-    'file' => 'tims.admin.php',
-  );
-  $items['admin/structure/tims/%/edit'] = array(
-    'title' => 'Edit template',
-    'page callback' => 'drupal_get_form',
-    'page arguments' => array('tims_edit', 3),
-    'access arguments' => array('administer site configuration'),
-    'file' => 'tims.admin.php',
-  );
-  $items['admin/structure/tims/%/delete'] = array(
-    'title' => 'Delete template',
-    'page callback' => 'drupal_get_form',
-    'page arguments' => array('tims_delete', 3),
-    'access arguments' => array('administer site configuration'),
-    'file' => 'tims.admin.php',
-  );
+function tims_template_access($op, $entity, $account, $entity_type) {
+  return user_access('administer site configuration', $account);
+}
 
-  return $items;
+class TimsTemplateEntity extends Entity {
+  public $id;
+  public $hook;
+  public $template;
+
+  protected function defaultUri() {
+    return array('path' => 'admin/structure/tims/manage/' . $this->identifier());
+  }
 }

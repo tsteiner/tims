@@ -1,16 +1,12 @@
 <?php
 
-function tims_edit($form, &$form_state, $hook) {
-  $templates = variable_get('tims_templates', array());
-  $template = '';
-  if (array_key_exists($hook, $templates)) {
-    $template = $templates[$hook];
-  }
+
+function tims_template_form($form, &$form_state, Entity $entity, $op, $entity_type) {
 
   $form['hook'] = array(
     '#type' => 'textfield',
     '#title' => 'Theme Hook',
-    '#default_value' => ($hook != '_new_' ? $hook : NULL),
+    '#default_value' => $entity->hook,
     '#description' => t('The theme hook for this template. See <a href="@link">Working with template suggestions</a>.', array('@link' => url('https://drupal.org/node/223440'))),
     '#required' => TRUE,
   );
@@ -18,7 +14,7 @@ function tims_edit($form, &$form_state, $hook) {
   $form['template'] = array(
     '#type' => 'textarea',
     '#title' => 'Template',
-    '#default_value' => $template,
+    '#default_value' => $entity->template,
     '#rows' => 20,
     '#description' => t('A template using Twig syntax. Refer to the <a href="@link">Theming Drupal 8</a> guide and <a href="@help">this module\'s help page</a>.', array('@link' => url('https://drupal.org/node/1906384'), '@help' => url('admin/help/tims'))),
   );
@@ -27,6 +23,7 @@ function tims_edit($form, &$form_state, $hook) {
     '#type' => 'submit',
     '#value' => 'Save',
   );
+
 
   // Checks for http://codemirror.net/ installed at sites/all/libraries for syntax highlighting.
   if (file_exists(DRUPAL_ROOT . '/sites/all/libraries/codemirror/lib/codemirror.js')) {
@@ -52,109 +49,29 @@ function tims_edit($form, &$form_state, $hook) {
     $form['template']['#attached']['css'][] = drupal_get_path('module', 'tims') . '/codemirror/tims.css';
   }
 
+
   return $form;
 }
 
-function tims_edit_validate($form, &$form_state) {
-  $templates = variable_get('tims_templates', array());
-  $originalHook = $form_state['complete form']['hook']['#default_value'];
-  $newHook = strtr($form_state['values']['hook'], array('-' => '_'));
-  if ($originalHook != $newHook && isset($templates[$newHook])) {
+function tims_template_form_validate($form, &$form_state) {
+  $new = entity_ui_form_submit_build_entity($form, $form_state);
+  $existingEntities = entity_load('tims_template', FALSE, array('hook' => $new->hook));
+  foreach ($existingEntities as $existingEntity)
+  if ($new !== $existingEntity) {
     form_set_error('hook', 'This theme hook is already in use.');
   }
 }
 
-function tims_edit_submit($form, &$form_state) {
-  $templates = variable_get('tims_templates', array());
-  $originalHook = $form_state['complete form']['hook']['#default_value'];
-  $newHook = strtr($form_state['values']['hook'], array('-' => '_'));
-  unset($templates[$originalHook]);
-  $templates[$newHook] = $form_state['values']['template'];
-  variable_set('tims_templates', $templates);
-  $form_state['redirect'] = 'admin/structure/tims';
+function tims_template_form_submit($form, &$form_state) {
+  $e = entity_ui_form_submit_build_entity($form, $form_state);
+  $e->save();
+  $form_state['redirect'] = 'admin/structure/tims/list';
 
-  if ($originalHook) {
-    drupal_set_message('Template for theme hook "' . $newHook . '" saved.');
-  }
-  else {
-    drupal_set_message('Template for theme hook "' . $newHook . '" created.');
-  }
-}
-
-function tims_delete($form, &$form_state, $hook) {
-  $form['hook'] = array(
-    '#type' => 'hidden',
-    '#value' => $hook,
+  $opVerbs = array(
+    'add'    => 'created',
+    'edit'   => 'saved',
+    'delete' => 'deleted',
   );
 
-  return confirm_form(
-    $form,
-    t('Are you sure you want to delete the template for "%tn"?', array('%tn' => $hook)),
-    'admin/structure/tims',
-    t('This action cannot be undone.'),
-    t('Delete Template')
-  );
-}
-
-function tims_delete_submit($form, &$form_state) {
-  $hook = $form_state['values']['hook'];
-  $templates = variable_get('tims_templates', array());
-  unset($templates[$hook]);
-  variable_set('tims_templates', $templates);
-  $form_state['redirect'] = 'admin/structure/tims';
-
-  drupal_set_message('Template for theme hook "' . $hook . '" deleted.');
-}
-
-function tims_list($form, &$form_state) {
-  $header = array(
-    'hook' => array(
-      'data' => t('Hook'),
-      'field' => 'hook',
-      'sort' => 'asc',
-    ),
-    'operations' => t('Operations'),
-  );
-
-  $templates = variable_get('tims_templates', array());
-
-  $rows = array();
-  foreach ($templates as $hook => $template) {
-    $rows[$hook] = array(
-      'hook' => $hook,
-      'operations' => array(
-        'data' => array(
-          '#theme' => 'links__node_operations',
-          '#links' => array(
-            'edit' => array(
-              'title' => t('edit'),
-              'href' => 'admin/structure/tims/' . $hook . '/edit',
-            ),
-            'delete' => array(
-              'title' => t('delete'),
-              'href' => 'admin/structure/tims/' . $hook . '/delete',
-            ),
-          ),
-          '#attributes' => array('class' => array('links', 'inline')),
-        ),
-      ),
-    );
-  }
-
-  if (tablesort_get_sort($header) == 'desc') {
-    krsort($rows);
-  }
-  else {
-    ksort($rows);
-  }
-
-  $form['template_list'] = array(
-    '#caption' => t('Existing Templates: ') . count($templates),
-    '#theme' => 'table',
-    '#header' => $header,
-    '#rows' => $rows,
-    '#empty' => t('No templates have been created.'),
-  );
-
-  return $form;
+  drupal_set_message('Template for theme hook "' . $e->hook . '" ' . $opVerbs[$form_state['op']] . '.');
 }
